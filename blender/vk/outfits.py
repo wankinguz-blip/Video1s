@@ -235,10 +235,206 @@ def hat(b, kind):
     return b.rigid("hat", parts, bone="head")
 
 
-# ---------------------------------------------------------------- saxophonist / emo (filled in below)
+def bare_hands(b):
+    hands(b, {s: (M.skin_pad(), 0.0) for s in SIDES})
+
+
+def cuffs(b, mat, name, s0=0.425, s1=0.495, radius=0.051, sides=SIDES):
+    """Short bands around the wrists (shirt cuffs, wristbands); they ride on the forearm."""
+    for s in sides:
+        band = b.body.arm_mesh(s, [(s0, radius - 0.001), ((s0 + s1) / 2, radius), (s1, radius - 0.002)], sides=20, cap0="flat", cap1="flat", per_seg=2)
+        b.skinned(f"{name}{s}", band, mat, at=b.body.arm_point(s, s0 + 0.01))
+
+
+# ---------------------------------------------------------------- saxophonist
+WINE = dict(color=M.S("#8a1a3c"), rough=0.50, sheen=0.9, tint=(1.0, 0.55, 0.68))
+CREAM = dict(color=M.S("#f1e6cb"), rough=0.68, sheen=0.4, tint=(1.0, 1.0, 1.0))
+OLD_GOLD = M.S("#d9a23a")
+
+
 def sax(b):
-    singer(b)
+    """Classic jazz musician: burgundy suit, cream shirt, golden bow tie, pork-pie hat, two-tone
+    spectator shoes, golden alto saxophone."""
+    body = b.body
+    m_tr = M.cloth("vk_sax_trousers", [dict(WINE, rough=0.46), {}, {}, M.SHADOW], weave=820.0)
+    trousers(b, m_tr, cuff_z=0.128, leg=(0.097, 0.082, 0.074))
+    socks(b, M.cloth("vk_sock_wine", [dict(color=M.S("#3a0a1a"), rough=0.7, sheen=0.5)], weave=1400.0), top_z=0.20)
+    # spectator shoes: cream leather with oxblood toe caps and heel counters
+    m_shoe = M.leather("vk_spectator", [dict(color=M.S("#efe4cf"), rough=0.26), dict(color=M.S("#571022"), rough=0.22),
+                                         dict(color=(0.02, 0.015, 0.012), rough=0.5, coat=0.1)])
+    for s in SIDES:
+        mesh, w, local = shoe_mesh(b, s, "loafer")
+        cap = np.maximum(0.5 + (-0.176 - local[:, 1]) / 0.010, 0.5 + (local[:, 1] - 0.012) / 0.010)
+        sole = 0.5 + ((-R.ANKLE_H + 0.016) - local[:, 2]) / 0.006
+        b.skinned("shoe" + s, mesh, m_shoe, paint=(np.clip(cap, 0, 1), np.clip(sole, 0, 1)), weights=w)
+
+    # suit jacket buttoned over a cream shirt: V opening from the top button to the collar
+    sleeve = [(-0.02, 0.074), (0.0, 0.074), (0.12, 0.071), (0.25, 0.067), (0.40, 0.062), (0.452, 0.060)]
+    mesh = torso_garment(b, 0.452, 0.972, G_JACKET, sleeve, hem_flare=0.012)
+    v, f = mesh
+    half = lambda z: 0.098 * smoothstep(0.655, 0.955, z)
+    d = front_opening(v, body, half, z_bottom=0.655)
+    lw = 0.050 * smoothstep(0.66, 0.80, v[:, 2]) * (1 - 0.5 * smoothstep(0.90, 0.97, v[:, 2])) + 0.010
+    lap = np.minimum(-d, lw + d) * (v[:, 1] < -0.03) * (v[:, 2] > 0.64)
+    relief = -(G_JACKET - G_SHIRT) * smoothstep(-0.004, 0.005, d) + 0.006 * smoothstep(0.0, 0.007, lap)
+    mesh = mk.displace(mesh, relief)
+    caps = sleeve_caps(b, mesh, 0.452) + cap_field(mesh, (0, 0, -1), (0, 0, 0.452), tol=0.02)
+    paint = (np.clip(0.5 + d / 0.010, 0, 1), np.clip(0.5 + lap / 0.008, 0, 1) * (d < 0.002), np.clip(caps, 0, 1))
+    m_jacket = M.cloth("vk_sax_jacket", [dict(WINE), dict(CREAM), dict(color=M.S("#4d0b1f"), rough=0.24, sheen=0.4, coat=0.6), M.SHADOW],
+                       weave=760.0)
+    b.skinned("jacket", mesh, m_jacket, paint=paint, legs=False)
+    m_gold = M.metal("vk_gold", M.GOLD, 0.20, tint2=M.GOLD_DEEP)
+    buttons = [(props._puck(body.torso_point(0.0, z, G_JACKET + 0.002), (0.0, -1.0, 0.05), 0.0125, 0.005, 14, dome=0.002), m_gold) for z in (0.625, 0.560)]
+    b.skinned("buttons", buttons, arms=False, legs=False)
+
+    # shirt collar band and cuffs, bow tie
+    m_shirt = M.cloth("vk_sax_shirt", [dict(CREAM)], weave=1500.0)
+    th = np.linspace(0, 2 * np.pi, 48, endpoint=False)
+    collar = skin.ring(body.torso_point(th, 0.968, 0.010), [(0.006, 0.021)] * len(th), sides=8, ref=(0, 0, 1))
+    b.skinned("collar", collar, m_shirt, arms=False, legs=False)
+    cuffs(b, m_shirt, "cuff", s0=0.440, s1=0.492, radius=0.0515)
+    m_bow = M.cloth("vk_bowtie", [dict(color=OLD_GOLD, rough=0.3, sheen=0.5, coat=0.4)], weave=1700.0, bump=0.1)
+    c = np.array((0.0, -0.126, 0.930))
+    bow = [(skin.rounded_box(c + (0, -0.006, 0), (0.014, 0.012, 0.016), 0.008, 3), m_bow)]
+    for k in (1, -1):
+        wing = skin.tube([c + (k * 0.008, -0.004, 0), c + (k * 0.040, -0.008, 0.002), c + (k * 0.082, -0.002, 0.004)],
+                         [(0.013, 0.008), (0.026, 0.008), (0.034, 0.007)], sides=14, per_seg=4, cap_start="flat", cap_end="round")
+        bow.append((wing, m_bow))
+    b.skinned("bowtie", bow, at=(0.0, -0.11, 0.93), arms=False, legs=False)
+
+    bare_hands(b)
+    porkpie(b)
+    props.sax(b)
 
 
+def porkpie(b):
+    """Pork-pie jazz hat: low telescope crown, short brim curled up all round."""
+    hb = b.hp(R.HEAD["hat_base"]) + (0.0, -0.03, 0.0)
+    felt = M.cloth("vk_felt_wine", [dict(color=M.S("#571226"), rough=0.6, sheen=1.0, tint=(1.0, 0.6, 0.7))], bump=0.15)
+    band = M.cloth("vk_hat_band_gold", [dict(color=OLD_GOLD, rough=0.3, sheen=0.5, coat=0.3)], weave=1500.0, bump=0.1)
+    prof = [(0.0, -0.01), (0.240, -0.01), (0.240, 0.0), (0.238, 0.06), (0.233, 0.115), (0.226, 0.148), (0.214, 0.163), (0.198, 0.166),
+            (0.184, 0.156), (0.172, 0.140), (0.12, 0.136), (0.0, 0.138)]
+    cv, cf = skin.lathe(prof, 48, scale=(1.0, 0.97))
+    r0, r1, th = 0.232, 0.305, 0.009
+    bp = [(r0, 0.0)] + [(r0 + (r1 - r0) * u, 0.0) for u in (0.3, 0.6, 0.9)] + [(r1, th * 0.2), (r1 + 0.004, th * 0.5), (r1, th * 0.8)] + \
+         [(r0 + (r1 - r0) * u, th) for u in (0.9, 0.6, 0.3, 0.0)]
+    bv, bf = skin.lathe(bp, 64, closed=True, scale=(1.0, 0.97))
+    rr = np.hypot(bv[:, 0], bv[:, 1])
+    u = np.clip((rr - r0) / (r1 - r0), 0, 1.05)
+    bv[:, 2] += 0.030 * u ** 1.8 - 0.004 * u
+    bandm = skin.lathe([(0.2420, 0.004), (0.2440, 0.006), (0.2420, 0.036), (0.2385, 0.038), (0.236, 0.036), (0.236, 0.004)], 48, closed=True, scale=(1.0, 0.97))
+    parts = [((cv + hb, cf), felt), ((bv + hb, bf), felt), ((bandm[0] + hb, bandm[1]), band)]
+    return b.rigid("hat", parts, bone="head")
+
+
+# ---------------------------------------------------------------- emo dancer
 def emo(b):
-    singer(b)
+    """2000s emo: black tee with a pink heart, skinny black jeans, studded belt and wallet chain,
+    black wristbands, sneakers with pink laces, long black fringe with a pink streak."""
+    body = b.body
+    m_jeans = M.cloth("vk_emo_jeans", [dict(color=(0.022, 0.022, 0.030), rough=0.5, sheen=0.6, tint=(0.6, 0.7, 1.0)), {}, {}, M.SHADOW], weave=1100.0)
+    trousers(b, m_jeans, cuff_z=0.130, waist_z=0.605, leg=(0.090, 0.069, 0.057))
+    m_silver = M.metal("vk_silver", M.SILVER, 0.22)
+    belt(b, 0.545, 0.036, M.leather("vk_belt_black", [dict(color=(0.012, 0.012, 0.014), rough=0.3)]), m_silver, studs=dict(n=26, mat=m_silver))
+    # wallet chain on the right hip
+    u = np.linspace(0.0, 1.0, 22)
+    th = -0.62 - 1.75 * u
+    chain = body.torso_point(th, 0.530, G_BELT + 0.016)
+    chain[:, 2] -= 0.150 * np.sin(np.pi * u) ** 0.75
+    b.skinned("chain", skin.tube(chain, [0.0048] * len(chain), sides=6, per_seg=1), m_silver, at=(-0.20, 0.0, 0.50), arms=False, legs=False)
+
+    # sneakers: black canvas, white rubber sole and toe cap, pink laces
+    m_shoe = M.leather("vk_sneaker", [dict(color=(0.016, 0.016, 0.020), rough=0.6), dict(color=(0.85, 0.85, 0.83), rough=0.42)], coat=0.15)
+    m_lace = M.simple("vk_lace_pink", M.PINK, roughness=0.5, emission=0.25, emission_color=M.PINK)
+    g = -R.ANKLE_H
+    for s in SIDES:
+        mesh, w, local = shoe_mesh(b, s, "sneaker")
+        rubber = np.maximum(0.5 + ((g + 0.036) - local[:, 2]) / 0.006, 0.5 + (-0.212 - local[:, 1]) / 0.008)
+        b.skinned("shoe" + s, mesh, m_shoe, paint=(np.clip(rubber, 0, 1),), weights=w)
+        J = b.J("foot." + s)
+        laces = []
+        for y in (-0.150, -0.122, -0.094, -0.066):
+            pts = []
+            for x in (-0.036, -0.018, 0.0, 0.018, 0.036):
+                near = np.hypot(local[:, 0] - x, local[:, 1] - y) < 0.011
+                pts.append(J + (x, y, float(local[near, 2].max()) + 0.0015))
+            laces.append(skin.tube(pts, [0.0048] * len(pts), sides=6, per_seg=2))
+        lv, lf = skin.merge(*laces)
+        b.skinned("laces" + s, (lv, lf), m_lace, weights={"foot." + s: np.ones(len(lv))})
+
+    # bare furry arms under a short-sleeved tee
+    for s in SIDES:
+        arm = body.arm_mesh(s, [(0.05, 0.064), (0.25, 0.056), (0.487, 0.046)], sides=20, cap0="round", cap1="flat")
+        n = len(arm[0])
+        b.skinned("arm" + s, arm, M.fur(), paint=(np.zeros(n), np.zeros(n)), legs=False)
+    z0 = 0.578
+    sleeve = [(-0.02, 0.078), (0.0, 0.078), (0.09, 0.076), (0.172, 0.075)]
+    mesh = torso_garment(b, z0, 0.972, 0.013, sleeve, shoulder=0.081, voxel=0.0075, smooth=5)
+    v, f = mesh
+    # the print: a pink heart on the chest, violet bands round the sleeve hems
+    hs = 0.066
+    hu, hw = v[:, 0] / hs, (v[:, 2] - 0.775) / hs + 0.12
+    heart = (hu * hu + hw * hw - 1.0) ** 3 - hu * hu * hw ** 3
+    heart = np.clip(0.5 - 2.0 * heart, 0, 1) * (v[:, 1] < -0.04)
+    stripe = 0
+    for s in SIDES:
+        sa = (v - body.shoulder[s]) @ body.arm_dir[s]
+        dist, _ = skin.seg_dist(v, body.shoulder[s], body.shoulder[s] + body.arm_dir[s] * 0.3)
+        stripe = stripe + np.clip(0.5 + (0.016 - np.abs(sa - 0.140)) / 0.006, 0, 1) * (dist < 0.11) * (dist > 0.05)
+    caps = sleeve_caps(b, mesh, 0.172) + cap_field(mesh, (0, 0, -1), (0, 0, z0), tol=0.02)
+    m_tee = M.cloth("vk_emo_tee", [dict(color=(0.011, 0.011, 0.014), rough=0.62, sheen=0.7, tint=(0.75, 0.6, 1.0)),
+                                   dict(color=M.PINK, rough=0.5, sheen=0.3, emit=0.35), dict(color=M.S("#9a4dff"), rough=0.5, sheen=0.3, emit=0.25),
+                                   M.SHADOW], weave=1300.0)
+    b.skinned("tee", mesh, m_tee, paint=(heart, np.clip(stripe, 0, 1) * (1 - np.clip(caps, 0, 1)), np.clip(caps, 0, 1)), legs=False)
+
+    bare_hands(b)
+    m_band = M.cloth("vk_wristband", [dict(color=(0.012, 0.012, 0.015), rough=0.7, sheen=0.8, tint=(0.8, 0.6, 1.0))], weave=900.0, bump=0.4)
+    cuffs(b, m_band, "wristband", s0=0.405, s1=0.468, radius=0.054)
+    emo_hair(b)
+
+
+def emo_hair(b):
+    """Asymmetric emo cut: a choppy black mop (rigid on the head) and a long fringe swept from a
+    parting on the character's left across the right eye; the fringe bends with the bone
+    'fringe' (automatic follow-through), one lock is pink."""
+    hp = b.hp
+    m_hair = M.simple("vk_hair_black", (0.011, 0.011, 0.017), roughness=0.36, sheen=0.8, sheen_tint=(0.55, 0.55, 1.0), coat=0.3)
+    m_pink = M.simple("vk_hair_pink", M.PINK, roughness=0.4, sheen=0.5, emission=0.3, emission_color=M.PINK)
+    # the mop: a dome set back and up on the skull, so it leaves the face free, with choppy ends
+    c, r = np.array((0.0, 0.035, 0.335)), np.array((0.320, 0.274, 0.264))
+    parts = [skin.ellipsoid(c, r, 40, 26)]
+    for deg in range(70, 291, 20):                                    # sides and back: layered ends hanging to the collar
+        a = math.radians(deg)
+        d = np.array((math.sin(a), -math.cos(a), 0.0))
+        k = 1.0 + 0.10 * math.sin(deg * 0.9)
+        base = c + d * r * 0.86 + (0, 0, -0.07)
+        tip = c + d * r * (1.06 + 0.05 * math.cos(deg * 0.37)) + (0, 0, -0.275 * k)
+        parts.append(skin.spike(base, tip, 0.062, bend=tuple(d * 0.035), sides=10, flat=0.55, ref=tuple(d), tip_radius=0.004))
+    for x, y, tx, ty, tz in ((0.10, 0.02, 0.19, 0.10, 0.66), (-0.08, 0.06, -0.16, 0.17, 0.655), (0.0, 0.12, 0.03, 0.27, 0.61),
+                             (-0.16, -0.02, -0.27, 0.03, 0.625), (0.19, 0.10, 0.30, 0.19, 0.57)):
+        parts.append(skin.spike((x, y, 0.555), (tx, ty, tz), 0.058, bend=(0.0, 0.0, 0.03), sides=10, flat=0.7, tip_radius=0.004))
+    for z0, x1, z1 in ((0.50, 0.335, 0.150), (0.44, 0.345, 0.215)):   # two locks in front of the left ear
+        parts.append(skin.spike((0.235, -0.06, z0), (x1, -0.105, z1), 0.050, bend=(0.03, -0.02, 0.0), sides=10, flat=0.55, ref=(1.0, 0.0, 0.0),
+                                tip_radius=0.004))
+    v, f = b.sculpt(parts, voxel=0.0085, smooth=3)
+    b.rigid("hair", (v + b.H, f), m_hair, "head")
+
+    # the fringe: locks from the parting (upper left) down across the forehead and the right eye
+    locks = [((0.165, -0.115, 0.538), (-0.290, -0.300, 0.150), 0.052, False),
+             ((0.135, -0.150, 0.548), (-0.240, -0.336, 0.185), 0.054, False),
+             ((0.105, -0.172, 0.553), (-0.180, -0.350, 0.212), 0.050, True),
+             ((0.072, -0.188, 0.556), (-0.118, -0.356, 0.250), 0.052, False),
+             ((0.040, -0.198, 0.556), (-0.052, -0.356, 0.300), 0.050, False),
+             ((0.008, -0.203, 0.553), (0.022, -0.342, 0.388), 0.046, False)]
+    black, pink, wb, wp = [], [], [], []
+    for base, tip, rad, is_pink in locks:
+        base, tip = np.array(base), np.array(tip)
+        mid_y = -0.362 - 0.5 * (base[1] + tip[1])                    # arc out in front of the brow and the glasses
+        lv, lf = skin.spike(hp(base), hp(tip), rad, bend=(0.0, mid_y, 0.035), sides=12, flat=0.34, tip_radius=0.005, per_seg=6)
+        _, along = skin.seg_dist(lv, hp(base), hp(tip))
+        w = smoothstep(0.22, 0.95, along)
+        (pink if is_pink else black).append((lv, lf))
+        (wp if is_pink else wb).append(w)
+    for name, meshes, ws, mat in (("fringe", black, wb, m_hair), ("streak", pink, wp, m_pink)):
+        w = np.concatenate(ws)
+        b.skinned(name, skin.merge(*meshes), mat, weights={"head": 1.0 - w, "fringe": w})
