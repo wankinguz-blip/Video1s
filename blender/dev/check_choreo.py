@@ -54,7 +54,7 @@ HATS = {
                ("head", "cyl", HEAD["hat_base"], (0.22, 0.20, 0.0, 0.22), "hat crown")],
     "sax": [("head", "cyl", HEAD["hat_base"], (0.30, 0.30, -0.02, 0.02), "hat brim"),
             ("head", "cyl", HEAD["hat_base"], (0.21, 0.19, 0.0, 0.18), "hat crown")],
-    "emo": [("head", "ell", (-0.07, -0.25, 0.33), (0.17, 0.07, 0.14), "fringe")],
+    "emo": [("head", "ell", (-0.10, -0.33, 0.33), (0.20, 0.06, 0.21), "fringe")],      # the hanging part of outfits.emo_hair()
 }
 TORSO_VOL = [
     ("hips", "cyl", (0.0, 0.0, 0.0), (0.20, 0.17, -0.08, 0.10), "pelvis"),
