@@ -3,6 +3,7 @@
 #
 #   scripts/show.sh setup             download Blender 4.5.16 LTS into tools/ and check ffmpeg
 #   scripts/show.sh test [T]          one still per screen at loop time T (default 2.5 s) -> out/test/
+#   scripts/show.sh bench             one full-size frame of the widest screen: time and estimate for `final`
 #   scripts/show.sh preview           low-resolution panorama video with sound -> out/preview/
 #   scripts/show.sh final             full-resolution frames of the three screens + videos -> deliverables/
 #   scripts/show.sh frames SCREEN     render (or resume) the frames of one screen: left | center | right | pano
@@ -17,9 +18,11 @@
 #   SAMPLES   render samples (default: scene default, 32)
 #   ENGINE    eevee (default) | cycles
 #   CRF       H.264 quality (default 16; lower = better and bigger)
-#   EXTRA     extra arguments passed to blender/render.py
+#   EXTRA     extra arguments passed to blender/render.py, e.g. EXTRA="--quality draft" or "--grass 0.5"
+#   FRAMES    number of frames (default 450 = the whole loop; a small number is only for trying the pipeline)
 #
 # Rendering is resumable: frames that already exist are skipped. Stop with Ctrl-C and start again.
+# The complete Blender output of the last runs is kept in out/logs/render.log.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -34,13 +37,15 @@ SHA_LINUX_X64="23432b064977908beb1ab4b7f32f024e7331105c875c187dce002aff84b10c11"
 
 SCREENS="left center right"
 FPS=30
-FRAMES=450
+LOOP_FRAMES=450
+FRAMES="${FRAMES:-$LOOP_FRAMES}"
 JOBS="${JOBS:-1}"
 SCALE="${SCALE:-1}"
 ENGINE="${ENGINE:-eevee}"
 CRF="${CRF:-16}"
 EXTRA="${EXTRA:-}"
 AUDIO="deliverables/soundtrack.wav"
+LOG="out/logs/render.log"
 
 say() { printf '\n== %s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -124,14 +129,22 @@ cmd_setup() {
     printf '\nffmpeg is missing. Install it:\n  macOS:  brew install ffmpeg\n  Linux:  sudo apt install ffmpeg\n'
     exit 1
   fi
+  if [ "$os" = "Linux" ] && command -v ldconfig >/dev/null 2>&1 && ! ldconfig -p | grep -q 'libEGL\.so\.1'; then
+    printf '\nlibEGL is missing (Blender needs it to render without a display). Install it:\n  sudo apt install libegl1\n'
+    exit 1
+  fi
   [ -f "$AUDIO" ] || die "$AUDIO is missing"
   printf '\nNext step:  scripts/show.sh test\n'
 }
 
-# blender_render ARGS…  — one Blender process; shows only the pipeline's own lines and errors
+# blender_render ARGS…  — one Blender process; shows only the pipeline's own lines and errors,
+# the complete output goes to $LOG
 blender_render() {
+  mkdir -p "$(dirname "$LOG")"
+  printf '\n===== %s  blender/render.py --engine %s %s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$ENGINE" "$EXTRA" "$*" >> "$LOG"
   # shellcheck disable=SC2086
   "$BLENDER_BIN" -b --factory-startup --python blender/render.py -- --engine "$ENGINE" ${SAMPLES:+--samples "$SAMPLES"} $EXTRA "$@" 2>&1 \
+    | tee -a "$LOG" \
     | grep --line-buffered -E '^\[vk\]|Traceback|^  File |Error|error:' | grep --line-buffered -v 'EGL Error' || true
 }
 
@@ -140,7 +153,7 @@ frames_dir() { echo "out/frames/scale_${SCALE}/$1"; }
 count_frames() { find "$1" -maxdepth 1 -name 'f[0-9][0-9][0-9][0-9].png' 2>/dev/null | wc -l | tr -d ' '; }
 
 render_frames() {   # SCREEN
-  local screen="$1" dir n pids="" i
+  local screen="$1" dir n pids="" i range="0-$((FRAMES - 1))"
   screen_width "$screen" >/dev/null
   dir="$(frames_dir "$screen")"
   mkdir -p "$dir"
@@ -148,11 +161,11 @@ render_frames() {   # SCREEN
   if [ "$n" -ge "$FRAMES" ]; then say "$screen: all $FRAMES frames exist in $dir"; return; fi
   say "$screen: rendering $((FRAMES - n)) of $FRAMES frames at scale $SCALE into $dir (jobs: $JOBS)"
   if [ "$JOBS" -le 1 ]; then
-    blender_render --slice "$screen" --scale "$SCALE" --out "$dir"
+    blender_render --slice "$screen" --scale "$SCALE" --frames "$range" --out "$dir"
   else
     i=1
     while [ "$i" -le "$JOBS" ]; do
-      blender_render --slice "$screen" --scale "$SCALE" --out "$dir" --part "$i/$JOBS" &
+      blender_render --slice "$screen" --scale "$SCALE" --frames "$range" --out "$dir" --part "$i/$JOBS" &
       pids="$pids $!"
       i=$((i + 1))
     done
@@ -160,7 +173,7 @@ render_frames() {   # SCREEN
     wait $pids
   fi
   n="$(count_frames "$dir")"
-  [ "$n" -ge "$FRAMES" ] || die "$screen: only $n of $FRAMES frames were rendered — see the messages above, then run the same command again (it resumes)"
+  [ "$n" -ge "$FRAMES" ] || die "$screen: only $n of $FRAMES frames were rendered — see the messages above and $LOG, then run the same command again (it resumes)"
 }
 
 # H.264 High, yuv420p (BT.709), 30 fps, exactly 450 frames, AAC sound.  Odd preview sizes are padded to even.
@@ -173,11 +186,16 @@ encode_sequence() {   # INPUT_PATTERN OUTPUT [EXTRA_FILTER]
     -frames:v "$FRAMES" -vf "$filter" \
     -c:v libx264 -preset slow -tune animation -crf "$CRF" -profile:v high -g "$FPS" \
     -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv \
-    -c:a aac -b:a 320k -t 15 -movflags +faststart "$2"
+    -c:a aac -b:a 320k -t "$DURATION" -movflags +faststart "$2"
   printf '   -> %s\n' "$2"
 }
 
-out_dir() { if [ "$SCALE" = "1" ]; then echo "deliverables"; else echo "out/video/scale_${SCALE}"; fi; }
+DURATION="$(awk "BEGIN { printf \"%.6f\", $FRAMES / $FPS }")"
+
+# finished full-size loops go to deliverables/, everything else (scaled or shortened trials) to out/video/
+out_dir() {
+  if [ "$SCALE" = "1" ] && [ "$FRAMES" = "$LOOP_FRAMES" ]; then echo "deliverables"; else echo "out/video/scale_${SCALE}"; fi
+}
 
 cmd_encode() {
   need_ffmpeg
@@ -202,7 +220,7 @@ cmd_encode() {
       -filter_complex "[0:v][1:v][2:v]hstack=inputs=3,scale=3840:-2:flags=lanczos,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p[v]" \
       -map "[v]" -map 3:a -frames:v "$FRAMES" -c:v libx264 -preset slow -tune animation -crf 18 -profile:v high \
       -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv \
-      -c:a aac -b:a 320k -t 15 -movflags +faststart "$od/VANKING_panorama_preview.mp4"
+      -c:a aac -b:a 320k -t "$DURATION" -movflags +faststart "$od/VANKING_panorama_preview.mp4"
     printf '   -> %s\n' "$od/VANKING_panorama_preview.mp4"
   fi
 }
@@ -220,7 +238,7 @@ cmd_test() {
   local t="${1:-2.5}" screen
   mkdir -p out/test
   for screen in $SCREENS; do
-    say "test still: $screen at t=$t s (quarter resolution)"
+    say "test still: $screen at t=$t s (scale ${TEST_SCALE:-0.25})"
     blender_render --slice "$screen" --scale "${TEST_SCALE:-0.25}" --time "$t" --out "out/test/$screen" --force
   done
   if command -v ffmpeg >/dev/null 2>&1; then
@@ -232,17 +250,32 @@ cmd_test() {
   fi
 }
 
+# Two consecutive frames of the widest screen; the second one (shaders are compiled by then) is the
+# honest per-frame time.  The other two screens are assumed to scale with their width.
+cmd_bench() {
+  need_blender
+  local dir="out/bench" secs
+  rm -rf "$dir"; mkdir -p "$dir"
+  say "bench: two frames of the centre screen at scale $SCALE (11752 x 1872 at scale 1)"
+  secs="$(blender_render --slice center --scale "$SCALE" --time 2.5,2.5333333 --out "$dir" --force | tee /dev/stderr \
+    | sed -n 's/.* \([0-9.][0-9.]*\)s\/frame.*/\1/p' | tail -1)"
+  [ -n "$secs" ] || die "the frames were not rendered — see $LOG"
+  awk -v s="$secs" -v f="$LOOP_FRAMES" 'BEGIN {
+    h = s * f * 24856 / 11752 / 3600
+    printf "\n== centre screen: %.1f s per frame  ->  `final` (3 screens x %d frames) needs about %.1f hours with JOBS=1\n", s, f, h }'
+}
+
 cmd_preview() {
   need_blender; need_ffmpeg
-  local dir="out/preview/frames" scale="${PREVIEW_SCALE:-0.125}" n pids="" i
+  local dir="out/preview/frames" scale="${PREVIEW_SCALE:-0.125}" n pids="" i range="0-$((FRAMES - 1))"
   mkdir -p "$dir"
   say "preview: panorama at scale $scale (jobs: $JOBS)"
   if [ "$JOBS" -le 1 ]; then
-    blender_render --slice pano --scale "$scale" --out "$dir" --quality draft
+    blender_render --slice pano --scale "$scale" --frames "$range" --out "$dir" --quality draft
   else
     i=1
     while [ "$i" -le "$JOBS" ]; do
-      blender_render --slice pano --scale "$scale" --out "$dir" --quality draft --part "$i/$JOBS" &
+      blender_render --slice pano --scale "$scale" --frames "$range" --out "$dir" --quality draft --part "$i/$JOBS" &
       pids="$pids $!"
       i=$((i + 1))
     done
@@ -250,7 +283,7 @@ cmd_preview() {
     wait $pids
   fi
   n="$(count_frames "$dir")"
-  [ "$n" -ge "$FRAMES" ] || die "preview: only $n of $FRAMES frames were rendered — run the command again (it resumes)"
+  [ "$n" -ge "$FRAMES" ] || die "preview: only $n of $FRAMES frames were rendered — see $LOG, then run the command again (it resumes)"
   encode_sequence "$dir/f%04d.png" "out/preview/VANKING_panorama_preview.mp4"
 }
 
@@ -264,16 +297,17 @@ cmd_validate() {
     "$dir/t00_000.png" "$dir/t15_000.png" "$dir/t14_967.png" "$dir/t00_033.png" 2>&1 | grep -E '^\[loop\]' || die "comparison failed"
 }
 
-cmd_clean() { rm -rf out/frames out/test out/validate out/preview; say "removed rendered frames"; }
+cmd_clean() { rm -rf out/frames out/test out/validate out/preview out/bench; say "removed rendered frames"; }
 
 case "${1:-help}" in
   setup) cmd_setup ;;
   test) shift; cmd_test "$@" ;;
+  bench) cmd_bench ;;
   preview) cmd_preview ;;
   final) cmd_final ;;
   frames) need_blender; render_frames "${2:?usage: scripts/show.sh frames left|center|right|pano}" ;;
   encode) cmd_encode ;;
   validate) cmd_validate ;;
   clean) cmd_clean ;;
-  *) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac
