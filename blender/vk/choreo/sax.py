@@ -206,6 +206,7 @@ _ELBOW = Track([(0.0, 0.0), (3.2, 0.0), (3.5, 0.8), (4.0, 0.8), (4.5, 0.0), (5.5
                 (19.0, 0.0), (19.25, 1.0), (19.95, 1.0), (20.5, 0.0), (23.3, 0.0), (23.5, 0.8), (24.0, 0.8),
                 (24.5, 0.0)], snap=1.0)
 
+_CLEAR = 0.10                                # horn swings forward by this much (rad) when the head is turned
 _MOUTH = np.array(HEAD["mouth"])
 _UG = np.array(propspec.SAX["upper_grip"])
 _LG = np.array(propspec.SAX["lower_grip"])
@@ -250,7 +251,10 @@ def pose(t):
     hb = p.neck_rot[0] + p.head_rot[0]                       # head relative to the chest (small angles)
     ht = p.neck_rot[1] + p.head_rot[1]
     hl = p.neck_rot[2] + p.head_rot[2]
-    rot = (s[0] - hb - 0.03 * pulse * blow + 0.02 * shake, s[1] - 0.75 * ht, s[2] - 0.75 * hl + 0.012 * shake)
+    # a turned head carries the mouthpiece sideways and back towards the rib cage: a horn that
+    # hangs low swings forward a little so the forearms stay clear of the chest / belly
+    clear = _CLEAR * smoothstep(0.08, 0.30, abs(ht)) * smoothstep(0.0, 0.20, s[0])
+    rot = (s[0] - hb - clear - 0.03 * pulse * blow + 0.02 * shake, s[1] - 0.75 * ht, s[2] - 0.75 * hl + 0.012 * shake)
     p.props["sax"] = Attach("head", pos=(_MOUTH[0], _MOUTH[1] - 0.01, _MOUTH[2]), rot=rot)
 
     # ---- hands on the keys (instrument space), fingers follow the notes
