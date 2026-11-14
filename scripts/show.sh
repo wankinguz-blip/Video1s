@@ -9,6 +9,7 @@
 #   scripts/show.sh frames SCREEN     render (or resume) the frames of one screen: left | center | right | pano
 #   scripts/show.sh encode            encode the frames that are already rendered
 #   scripts/show.sh validate          check that the 15 s loop closes (frame 450 == frame 0)
+#   scripts/show.sh seams [T]         check that the three screens join into one picture (compared with a panorama render)
 #   scripts/show.sh clean             delete rendered frames (out/frames)
 #
 # Environment variables (all optional):
@@ -297,7 +298,21 @@ cmd_validate() {
     "$dir/t00_000.png" "$dir/t15_000.png" "$dir/t14_967.png" "$dir/t00_033.png" 2>&1 | grep -E '^\[loop\]' || die "comparison failed"
 }
 
-cmd_clean() { rm -rf out/frames out/test out/validate out/preview out/bench; say "removed rendered frames"; }
+# The three screens must be the same picture as one panorama render (no visible seam).
+cmd_seams() {
+  need_blender
+  local dir="out/seams" scale="${VALIDATE_SCALE:-0.125}" t="${1:-2.5}" screen name
+  rm -rf "$dir"; mkdir -p "$dir"
+  say "seam check: left, center, right and the whole panorama at t=$t s (scale $scale)"
+  for screen in $SCREENS pano; do
+    blender_render --slice "$screen" --scale "$scale" --time "$t" --out "$dir/$screen" --force
+  done
+  name="$(cd "$dir/pano" && ls t*.png | head -1)"
+  "$BLENDER_BIN" -b --factory-startup --python blender/dev/compare_seams.py -- \
+    "$dir/left/$name" "$dir/center/$name" "$dir/right/$name" "$dir/pano/$name" 2>&1 | grep -E '^\[seams\]' || die "comparison failed"
+}
+
+cmd_clean() { rm -rf out/frames out/test out/validate out/seams out/preview out/bench; say "removed rendered frames"; }
 
 case "${1:-help}" in
   setup) cmd_setup ;;
@@ -308,6 +323,7 @@ case "${1:-help}" in
   frames) need_blender; render_frames "${2:?usage: scripts/show.sh frames left|center|right|pano}" ;;
   encode) cmd_encode ;;
   validate) cmd_validate ;;
+  seams) shift; cmd_seams "$@" ;;
   clean) cmd_clean ;;
-  *) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac
