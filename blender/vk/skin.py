@@ -274,12 +274,15 @@ def outward(mesh):
 def ring(points, radii, sides=10, ref=None):
     """Closed tube through a closed loop of points (no smoothing: pass a dense loop).  `ref` is the
     direction of the second radius (default: the normal of the loop's plane).
-    radii: scalar, or per-point scalars, or per-point (r_side, r_ref) pairs."""
+    radii: scalar, one (r_side, r_ref) pair for the whole loop, per-point scalars, or per-point
+    (r_side, r_ref) pairs."""
     p = np.asarray(points, dtype=np.float64)
     n = len(p)
     r = np.asarray(radii, dtype=np.float64)
     if r.ndim == 0:
         r = np.full(n, float(r))
+    if r.ndim == 1 and len(r) == 2 and n != 2:
+        r = np.tile(r, (n, 1))
     if r.ndim == 1:
         r = np.stack([r, r], axis=1)
     tang = np.roll(p, -1, axis=0) - np.roll(p, 1, axis=0)

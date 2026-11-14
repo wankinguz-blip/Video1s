@@ -273,6 +273,23 @@ def skin_pad(name="vk_pad"):
     return cached(name, make)
 
 
+def hair(name, color, tint=(0.55, 0.55, 1.0), emission=0.0):
+    """Glossy hair: fine strands running down the fall of the hair (rest-space Z) as a bump and
+    as streaks of value, soft coloured sheen on the rim."""
+    def make(name):
+        g = Graph(name)
+        p = g.rest()
+        strand = g.noise(g.mapping(p, scale=(1.0, 1.0, 0.07)), 170.0, 2.0, 0.6)
+        clump = g.noise(g.mapping(p, scale=(1.0, 1.0, 0.22)), 30.0, 2.0, 0.5)
+        g.set(Base_Color=g.value((*color, 1.0), g.remap(strand, 0.25, 0.75, 0.65, 1.6)), Roughness=g.remap(strand, 0.3, 0.7, 0.30, 0.52),
+              Sheen_Weight=0.8, Sheen_Tint=(*tint, 1.0), Sheen_Roughness=0.35, Coat_Weight=0.10, Coat_Roughness=0.25)
+        g.set(Normal=g.bump(g.math("ADD", g.math("MULTIPLY", strand, 0.6), g.math("MULTIPLY", clump, 0.9)), 0.7, 0.004))
+        if emission > 0:
+            g.set(Emission_Color=(*color, 1.0), Emission_Strength=emission)
+        return g.mat
+    return cached(name, make)
+
+
 def simple(name, color, roughness=0.5, metallic=0.0, coat=0.0, sheen=0.0, emission=0.0, sheen_tint=(1.0, 1.0, 1.0), spec=0.5,
            emission_color=None):
     def make(name):
