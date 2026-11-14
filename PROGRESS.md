@@ -32,7 +32,7 @@ the remaining step and has to be made on the customer's Mac.**
 | Choreography (`blender/dev/check_choreo.py`) | singer **PASS**, sax **PASS**, emo **PASS** (loop closure, jumps, velocity kinks, reach, collisions with head / hat / fringe / torso, planted-foot sliding, knees, microphone and saxophone contacts); [stick-figure sheet of the emo routine](docs/preview/emo_routine_sticks.png) |
 | Costumes and props | pose sheets (rest, arms up, saxophone hold) from front, three-quarter, side and back; key moments of all three routines on the final models; close-ups of the hat pinch, the microphone at the mouth and the hands on the saxophone |
 | Pipeline `scripts/show.sh` on Linux at 1/16 size | `setup`, `test`, `bench`, `preview` (`JOBS=2`), `frames` (resume), `final` (frames → three mp4 + panorama preview), `validate`, `seams`: all ran without errors |
-| Final quality (full grass density) | a close-up of the singer at 1/4 size (122 s in the sandbox) and three full-size strips of 256–512 px: render correctly |
+| Final quality (full grass density) | close-ups of all three characters at 1/4 size (85–122 s each in the sandbox) and three full-size strips of 256–512 px: render correctly |
 | Blender download | the three checksums in `scripts/show.sh` equal the official `blender-4.5.16.sha256` |
 
 Sandbox render times (2 CPU cores, software OpenGL — **not** representative of a Mac): draft
