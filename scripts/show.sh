@@ -95,6 +95,8 @@ cmd_setup() {
   mkdir -p tools
   local os arch file sha
   os="$(uname -s)"; arch="$(uname -m)"
+  # a terminal running under Rosetta reports x86_64 on Apple Silicon: still take the native build
+  if [ "$os" = "Darwin" ] && [ "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" = "1" ]; then arch="arm64"; fi
   if [ -n "$(find_blender)" ] && "$(find_blender)" --version 2>/dev/null | head -1 | grep -q "Blender ${BLENDER_SERIES}\."; then
     say "Blender is ready: $("$(find_blender)" --version | head -1)  ($(find_blender))"
   else
@@ -104,8 +106,14 @@ cmd_setup() {
       Linux-x86_64) file="blender-${BLENDER_VERSION}-linux-x64.tar.xz"; sha="$SHA_LINUX_X64" ;;
       *) die "no automatic Blender download for $os-$arch; install Blender ${BLENDER_VERSION} and set BLENDER=/path/to/blender" ;;
     esac
-    say "Downloading $file (about 350 MB)"
-    curl -L --fail --retry 3 -C - -o "tools/$file" "$BLENDER_URL/$file"
+    if [ -f "tools/$file" ] && [ "$(sha256_of "tools/$file")" = "$sha" ]; then
+      say "$file is already downloaded"
+    else
+      say "Downloading $file (about 350 MB)"
+      # resume a partial download; if the server refuses the range, start again
+      curl -L --fail --retry 3 -C - -o "tools/$file" "$BLENDER_URL/$file" \
+        || { rm -f "tools/$file"; curl -L --fail --retry 3 -o "tools/$file" "$BLENDER_URL/$file"; }
+    fi
     [ "$(sha256_of "tools/$file")" = "$sha" ] || die "checksum mismatch for tools/$file (delete the file and run setup again)"
     if [ "$os" = "Darwin" ]; then
       say "Installing Blender.app into tools/"
