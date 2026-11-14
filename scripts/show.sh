@@ -316,14 +316,14 @@ cmd_clean() { rm -rf out/frames out/test out/validate out/seams out/preview out/
 
 case "${1:-help}" in
   setup) cmd_setup ;;
-  test) shift; cmd_test "$@" ;;
+  test) shift; cmd_test ${1+"$@"} ;;      # ${1+"$@"}: bash 3.2 (macOS) rejects an empty "$@" under set -u
   bench) cmd_bench ;;
   preview) cmd_preview ;;
   final) cmd_final ;;
   frames) need_blender; render_frames "${2:?usage: scripts/show.sh frames left|center|right|pano}" ;;
   encode) cmd_encode ;;
   validate) cmd_validate ;;
-  seams) shift; cmd_seams "$@" ;;
+  seams) shift; cmd_seams ${1+"$@"} ;;
   clean) cmd_clean ;;
   *) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac
