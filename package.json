@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "VANKING.UZ Mole Music Show - 15 s seamless loop animation renderer",
+  "description": "VANKING.UZ Mole Music Show - soundtrack and data tools (the show itself is rendered with Blender, see blender/README.md)",
   "scripts": {
-    "extract": "node scripts/extract-mascot.mjs",
-    "still": "node scripts/still.mjs",
     "audio": "node audio/build-soundtrack.mjs",
-    "render": "node scripts/render.mjs"
+    "export-data": "node scripts/export-blender-data.mjs",
+    "text": "node scripts/build-text.mjs",
+    "legacy:still": "node legacy/2d/scripts/still.mjs",
+    "legacy:render": "node legacy/2d/scripts/render.mjs"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.1.1",
