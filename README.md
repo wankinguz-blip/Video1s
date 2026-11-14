@@ -93,7 +93,9 @@ All three are lens-shifted slices of the same camera, so the picture continues a
 | Right | Saxophonist | burgundy suit, cream shirt, golden bow tie, pork-pie hat, two-tone shoes, golden alto saxophone | fingering and puffed cheeks follow the notes of the score, sways, knee dips, lifts the horn on accents, eyes close on long notes |
 | Left | Emo dancer | black tee with a pink heart, skinny jeans, studded belt with chain, wristbands, sneakers with pink laces, long fringe with a pink streak | Tecktonik: forearm rolls, alternating windmills round the head, cross-body slices, angular locks, arm waves, heel swivels, jumps, a spin; fastest combinations on the bursts |
 
-![The three characters in scene lighting](docs/preview/characters.jpg)
+![The three characters in the scene, final quality](docs/preview/characters.jpg)
+
+*Final-quality close-ups at 1/4 size (emo dancer and saxophonist at t = 5.0 s, singer at t = 2.5 s).*
 
 The soundtrack (120 BPM pop-funk with saxophone, talk-box vocal and firework sounds) is synthesised
 by `audio/build-soundtrack.mjs` from `src/music/score.js`. The same score drives the lip-sync, the
