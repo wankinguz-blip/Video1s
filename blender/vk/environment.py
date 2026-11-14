@@ -1015,7 +1015,11 @@ def common_attrs(rng, x, y, z, height, width=None, yaw=None, lean=0.12, sway=1.0
 
 def build_grass(ctx, col, vis, state, blockers):
     rng = np.random.default_rng(SEED + 10)
-    q = 0.28 if ctx.draft else 1.0
+    # density multiplier: fewer tufts are made wider by 1/sqrt(q), so the meadow stays covered
+    # (draft and small previews do not need blades that are thinner than a pixel)
+    q = float(ctx.options.get("grass") or (0.10 if ctx.draft else 1.0))
+    wk = min(q ** -0.5, 3.6)
+    cast = bool(ctx.options.get("grass_shadow", False))
     gmat = state["grass_mat"]
     near_var = [tuft_mesh(f"VK_TuftN{i}", rng, gmat, int(rng.integers(7, 10)), 4) for i in range(6)]
     mid_var = [tuft_mesh(f"VK_TuftM{i}", rng, gmat, int(rng.integers(6, 9)), 3, spread=0.28, width=0.115) for i in range(5)]
@@ -1038,9 +1042,11 @@ def build_grass(ctx, col, vis, state, blockers):
     h = np.where(tall, h * rng.uniform(1.3, 1.75, len(x)), h)
     keep = vis.test(x, y, z, top=h) & ~blocked(x, y)
     x, y, z, h, md = x[keep], y[keep], z[keep], h[keep], md[keep]
-    a = common_attrs(rng, x, y, z, h, width=np.maximum(h, 0.105), sway=1.0)
+    a = common_attrs(rng, x, y, z, h, width=np.maximum(h, 0.105) * wk, sway=1.0)
     a["variant"] = rng.integers(0, len(near_var), len(x))
-    instancer("VK_GrassNear", col, near_var, a, 0.085, state)
+    # grass receives shadows but does not cast them by default: 8 M blade triangles in every
+    # shadow view of three suns cost far more than they add (the shader darkens the roots itself)
+    instancer("VK_GrassNear", col, near_var, a, 0.085, state, shadow=cast)
 
     # ---- mid-ground: density falls off, tufts grow (same size on screen), simpler tufts
     x, y = candidates(rng, C.PANO_X0 - 1.0, C.PANO_X1 + 1.0, 5.0, 62.0, D0 * 0.80)
@@ -1053,7 +1059,7 @@ def build_grass(ctx, col, vis, state, blockers):
     h = 0.155 * grow * patch_h * rng.uniform(0.7, 1.3, len(x))
     keep = vis.test(x, y, z, top=h) & ~blocked(x, y) & (hill_u(x, y) > 0.9)
     x, y, z, h = x[keep], y[keep], z[keep], h[keep]
-    a = common_attrs(rng, x, y, z, h, width=h * (1.0 + (y - 5.0) * 0.025), sway=1.0)
+    a = common_attrs(rng, x, y, z, h, width=h * (1.0 + (y - 5.0) * 0.025) * wk, sway=1.0)
     a["variant"] = rng.integers(0, len(mid_var), len(x))
     instancer("VK_GrassMid", col, mid_var, a, 0.085, state, shadow=False)
 
@@ -1590,7 +1596,8 @@ MUSHROOMS = [(_E - 1.25, -2.0, 1.0), (_E + 1.25, -2.55, 0.9), (_E + 2.55, -0.9, 
 def build(ctx):
     col = ctx.collection("Env")
     state = dict(wind=[], fireflies=None)
-    want = (lambda name: PARTS is None or name in PARTS)
+    parts = ctx.options.get("env") or PARTS
+    want = (lambda name: parts is None or name in parts)
     vis = Visibility()
     state["ground"] = build_ground(ctx, col)
     if want("sky"):

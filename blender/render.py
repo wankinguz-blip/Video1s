@@ -12,6 +12,10 @@ Options
   --samples N       render samples (default: 32 final / 8 draft for EEVEE)
   --quality Q       final (default) | draft  (draft = lighter geometry for quick previews)
   --skip A,B        skip scene modules (environment, lighting, characters, fireworks)
+  --grass Q         grass density multiplier (default 1 final / 0.1 draft); lower = faster frames
+  --grass-shadows   let the hero grass cast shadows (much slower, slightly richer meadow)
+  --env A,B         build only these environment layers (sky, props, grass, flowers, trees, fireflies)
+  --cast A,B        build only these characters (emo, singer, sax)
   --overscan PX     extra columns on each side (full-res px), cropped later by the encoder
   --force           re-render frames that already exist (default: resume, skip existing)
   --save-blend F    save the built scene to a .blend file and exit (for inspection in the UI)
@@ -26,6 +30,7 @@ import bpy
 HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
+sys.stdout.reconfigure(line_buffering=True)     # progress lines appear at once, also through a pipe
 
 from vk import camera as cam_mod  # noqa: E402
 from vk import config as C  # noqa: E402
@@ -46,6 +51,10 @@ def parse_args():
     p.add_argument("--samples", type=int, default=None)
     p.add_argument("--quality", default="final", choices=["final", "draft"])
     p.add_argument("--skip", default="")
+    p.add_argument("--grass", type=float, default=None)
+    p.add_argument("--grass-shadows", action="store_true")
+    p.add_argument("--env", default=None)
+    p.add_argument("--cast", default=None)
     p.add_argument("--overscan", type=int, default=0)
     p.add_argument("--force", action="store_true")
     p.add_argument("--save-blend", default=None)
@@ -58,7 +67,11 @@ def main():
     out_dir = os.path.abspath(a.out or os.path.join("out", "frames", a.slice.replace(":", "-")))
     os.makedirs(out_dir, exist_ok=True)
     t0 = time.time()
-    show = Show(engine=a.engine, quality=a.quality, samples=a.samples, skip=[s for s in a.skip.split(",") if s]).build()
+    options = dict(grass=a.grass, grass_shadow=a.grass_shadows,
+                   env=set(a.env.split(",")) if a.env is not None else None,
+                   cast=a.cast.split(",") if a.cast else None)
+    show = Show(engine=a.engine, quality=a.quality, samples=a.samples, skip=[s for s in a.skip.split(",") if s],
+                options=options).build()
     print(f"[vk] scene built in {time.time() - t0:.1f}s")
     scene = show.scene
 
