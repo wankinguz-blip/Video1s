@@ -61,7 +61,16 @@ preview would take about 4 hours, which is why it was left for the Mac.
 
 ## Session log
 
-### 2026-11-14, session 3 (this one): from "never rendered" to a complete, verified scene
+### 2026-11-15: clone instructions
+
+The customer asked for the complete clone commands. Checked: the repository is public (the git
+endpoint answers without credentials, so no GitHub login is needed); a fresh clone of the branch
+into an empty folder runs `scripts/show.sh help` directly (the script is executable in git). `README.md`
+and `NEXT_STEPS.md`: Homebrew prerequisite added (command confirmed against Homebrew's installer and
+documentation), the outdated "private repository" note removed, disk-space estimate for `final`
+added (about 25 GB of frames, from a full-size test strip). Nothing was run on macOS.
+
+### 2026-11-14, session 3: from "never rendered" to a complete, verified scene
 
 | # | Work | Verified by |
 | --- | --- | --- |

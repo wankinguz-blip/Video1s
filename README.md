@@ -38,9 +38,22 @@ scripts/show.sh preview    # low-resolution panorama video with sound -> out/pre
 scripts/show.sh final      # all frames of the three screens + videos -> deliverables/
 ```
 
-The repository is private, so `git clone` needs GitHub authorisation (for example `gh auth login`).
-After the branch is merged, `--branch vorflux/blender-3d-rework` is no longer needed.
+First time on this Mac? Install Homebrew before the commands above (the installer asks for the Mac
+password and also installs Apple's command line tools, which contain `git`):
 
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
+```
+
+* The repository is public, so cloning needs no GitHub login (checked without credentials on
+  2026-11-15). If `git` ever asks for a user name, the repository was made private: run
+  `brew install gh && gh auth login` and clone again.
+* If the folder `Video1s` already exists, update it instead of cloning: `cd Video1s && git pull`.
+* After the branch is merged, `--branch vorflux/blender-3d-rework` is no longer needed.
+* `final` writes about 25 GB of PNG frames into `out/frames/` (estimated from a full-size test
+  strip); keep 30 GB free.
 * Rendering can be interrupted with Ctrl-C; the same command continues where it stopped (finished
   frames are skipped). `scripts/show.sh frames center` renders one screen only.
 * `JOBS=2 scripts/show.sh final` runs two Blender processes; `SAMPLES=16` halves the render time at

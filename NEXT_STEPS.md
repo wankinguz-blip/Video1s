@@ -66,7 +66,20 @@
 
 ## 5. Команды для Mac
 
-Репозиторий закрытый: для `git clone` нужна авторизация GitHub (например `gh auth login`).
+Репозиторий открытый: для `git clone` вход в GitHub не нужен (проверено без авторизации 2026-11-15;
+клонирование ветки в чистую папку и запуск `scripts/show.sh help` из неё проверены в песочнице).
+Если git всё же спросит имя пользователя, значит, репозиторий закрыли: `brew install gh && gh auth login`.
+
+На Mac без Homebrew сначала один раз (установщик спросит пароль от Mac и сам поставит инструменты
+командной строки Apple, в которых есть `git`):
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
+```
+
+Затем:
 
 ```bash
 git clone --branch vorflux/blender-3d-rework https://github.com/wankinguz-blip/Video1s.git
@@ -81,7 +94,9 @@ scripts/show.sh final      # полные кадры трёх экранов + m
 
 Рендер можно прервать (Ctrl-C) и запустить ту же команду снова: готовые кадры пропускаются.
 `scripts/show.sh help` — все команды и переменные. Blender через `brew install --cask blender`
-ставить не нужно: версия может отличаться. Если репозиторий уже склонирован: `git pull`.
+ставить не нужно: версия может отличаться. Если папка `Video1s` уже есть, вместо клонирования:
+`cd Video1s && git pull`. Для `final` нужно около 30 ГБ свободного места: кадры PNG занимают
+примерно 25 ГБ (оценка по полноразмерной пробной полосе).
 
 ## 6. Как работать в песочнице
 
