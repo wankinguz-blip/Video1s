@@ -4,8 +4,19 @@
 //   node scripts/build-text.mjs
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 import { execSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
-import { mulberry32 } from '../src/math.js';
+import { mkdirSync, writeFileSync } from 'node:fs';
+
+// small deterministic random generator (same sequence as the first version of the show)
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
 const WORD = 'VANKING';
 const fontFile = execSync("fc-match -f '%{file}' 'DejaVu Sans:bold'").toString().trim();
@@ -78,4 +89,5 @@ const pv = createCanvas(1400, 260), pc = pv.getContext('2d');
 pc.fillStyle = '#0b1442'; pc.fillRect(0, 0, 1400, 260);
 pc.fillStyle = '#fff';
 for (const [px, py] of out) { pc.beginPath(); pc.arc(700 + px * 180, 130 + py * 180, 1.6, 0, 7); pc.fill(); }
+mkdirSync(new URL('../out/', import.meta.url), { recursive: true });
 writeFileSync(new URL('../out/text-preview.png', import.meta.url), pv.toBuffer('image/png'));

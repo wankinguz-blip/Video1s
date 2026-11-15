@@ -4,3 +4,9 @@ out/
 .DS_Store
 .env
 .secrets/
+
+# Blender pipeline
+__pycache__/
+*.pyc
+tools/
+*.blend1
